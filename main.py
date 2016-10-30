@@ -34,6 +34,12 @@ jinja_env = jinja2.Environment(autoescape=True,
                                loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
 
 
+class Wiki(db.Model):
+    path = db.StringProperty(required=True)
+    content = db.TextProperty(required=True)
+    time = db.DateTimeProperty(auto_now_add=True)
+
+
 class Handler(webapp2.RequestHandler):
     def write(self, *a, **kw):
         self.response.out.write(*a, **kw)
@@ -46,10 +52,74 @@ class Handler(webapp2.RequestHandler):
         self.write(self.render_str(template, **kw))
 
 
-class MainHandler(Handler):
-    def get(self):
-        self.response.write('Hello world!')
+class WikiPage(Handler):
+    def get(self, path):
+        search = db.GqlQuery("select * from Wiki where path=:1", path)
+        content = ""
+        if search:
+            for i in search:
+                content = i.content
+                break
+            if content != "":
+                self.render("index.html", content=content)
+            else:
+                self.redirect('/_edit' + path)
+        else:
+            self.redirect('/_edit' + path)
 
-app = webapp2.WSGIApplication([
-    ('/', MainHandler)
-], debug=True)
+    def post(self):
+        self.response.write("Wiki edit")
+
+
+class EditPage(Handler):
+    def get(self, path):
+        query = db.GqlQuery("select * from Wiki where path=:1", path)
+        content = ""
+        for i in query:
+            content = i.content
+            break
+        self.render("editor.html", savedata=content)
+
+    def post(self, path):
+        content = self.request.get("textarea")
+        if content!="":
+            wiki = Wiki(path=path, content=content)
+            wiki.put()
+            logging.error(path)
+            self.redirect(path)
+        else:
+            self.render("editor.html", error="Text Field cannot be empty!!!")
+
+class Logout(Handler):
+    def get(self):
+        self.response.write("Logout PAGE")
+
+    def post(self):
+        self.response.write("logout edit")
+
+
+class Login(Handler):
+    def get(self):
+        self.response.write("login PAGE")
+
+    def post(self):
+        self.response.write("login edit")
+
+
+class Signup(Handler):
+    def get(self):
+        self.response.write("Signup PAGE")
+
+    def post(self):
+        self.response.write("Signup edit")
+
+
+PAGE_RE = r'(/(?:[a-zA-Z0-9_-]+/?)*)'
+
+app = webapp2.WSGIApplication([('/signup', Signup),
+                               ('/login', Login),
+                               ('/logout', Logout),
+                               ('/_edit' + PAGE_RE, EditPage),
+                               (PAGE_RE, WikiPage),
+                               ],
+                              debug=True)
